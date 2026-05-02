@@ -17,8 +17,15 @@ app.use(express.static(path.join(ROOT, 'public')));
 
 const ensureJson = (file) => { if (!fs.existsSync(file)) fs.writeFileSync(file, '{}', 'utf8'); };
 const readJson = (file) => { ensureJson(file); try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return {}; } };
-const writeJson = (file, data) => fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
+const writeJson = (file, data) => {
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+  fs.renameSync(tmp, file);
+};
 
+
+ensureJson(REACTIONS_FILE);
+ensureJson(CAPTIONS_FILE);
 function collectImages(baseDir, relativePrefix = '') {
   const out = [];
   const entries = fs.readdirSync(baseDir, { withFileTypes: true });

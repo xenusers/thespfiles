@@ -20,6 +20,8 @@ function setCookie(name, value, days = 3650) {
   document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
 }
 const keyFor = (clipId, emoji) => `react_${btoa(unescape(encodeURIComponent(`${clipId}::${emoji}`))).replace(/=/g, '')}`;
+const isAdmin = () => Boolean(ADMIN_TOKEN && canEditCaptions);
+const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 
 function folderButtons(users) {
   folderNav.innerHTML = ['all', ...users].map((u) => `<button class="folder-btn ${u === selectedUser ? 'active' : ''}" data-user="${u}">${u === 'all' ? 'All folders' : '@' + u}</button>`).join('');
@@ -33,12 +35,19 @@ function reactionButton(clip, emoji) {
 }
 
 function captionEditor(clip) {
-  if (!canEditCaptions) return `<p class="caption">${clip.caption || ''}</p>`;
-  return `<form class="caption-form"><input maxlength="180" name="caption" value="${(clip.caption || '').replace(/"/g, '&quot;')}" placeholder="Add caption..." /><button type="submit">Save</button></form>`;
+  if (!canEditCaptions) return `<p class="caption">${escapeHtml(clip.caption)}</p>`;
+  return `<form class="caption-form"><input maxlength="180" name="caption" value="${escapeHtml(clip.caption)}" placeholder="Add caption..." /><button type="submit">Save</button></form>`;
+}
+
+function adminControls(clip) {
+  if (!isAdmin()) return '';
+  const countFor = (emoji) => Number((clip.reactions && clip.reactions[emoji]) || 0);
+  const options = REACTIONS.map((emoji) => `<option value="${emoji}" data-count="${countFor(emoji)}">${emoji}</option>`).join('');
+  return `<div class="admin-tools"><button type="button" class="pin-btn ${clip.pinned ? 'active' : ''}">${clip.pinned ? 'Unpin' : 'Pin'}</button><form class="fake-reaction-form"><select name="reaction">${options}</select><input name="count" type="number" min="0" step="1" value="${countFor(REACTIONS[0])}" aria-label="Reaction count" /><button type="submit">Set</button></form></div>`;
 }
 
 function cardTemplate(clip) {
-  return `<article class="card" data-id="${clip.id}"><img src="${clip.src}" alt="${clip.user} clip" loading="lazy" /><div class="meta"><span class="user">@${clip.user}</span>${captionEditor(clip)}<div class="reactions">${REACTIONS.map((e) => reactionButton(clip, e)).join('')}</div></div></article>`;
+  return `<article class="card ${clip.pinned ? 'pinned' : ''}" data-id="${escapeHtml(clip.id)}"><img src="${clip.src}" alt="${escapeHtml(clip.user)} clip" loading="lazy" /><div class="meta"><span class="user">${clip.pinned ? '<span class="pin-mark">Pinned</span>' : ''}@${escapeHtml(clip.user)}</span>${captionEditor(clip)}<div class="reactions">${REACTIONS.map((e) => reactionButton(clip, e)).join('')}</div>${adminControls(clip)}</div></article>`;
 }
 
 function visibleClips() { return selectedUser === 'all' ? allClips : allClips.filter((c) => c.user === selectedUser); }
@@ -70,6 +79,48 @@ function wireReactions() {
       });
       if (!res.ok) return;
     });
+
+    const pinBtn = card.querySelector('.pin-btn');
+    if (pinBtn) pinBtn.addEventListener('click', async () => {
+      const clip = allClips.find((item) => item.id === card.dataset.id);
+      if (!clip) return;
+      const nextPinned = !clip.pinned;
+      const res = await fetch('/api/pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
+        body: JSON.stringify({ clipId: clip.id, pinned: nextPinned })
+      });
+      if (!res.ok) return;
+      clip.pinned = nextPinned;
+      allClips.sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.user.localeCompare(b.user));
+      render();
+    });
+
+    const fakeForm = card.querySelector('.fake-reaction-form');
+    if (fakeForm) {
+      const reactionSelect = fakeForm.querySelector('select[name="reaction"]');
+      const countInput = fakeForm.querySelector('input[name="count"]');
+      reactionSelect.addEventListener('change', () => {
+        countInput.value = reactionSelect.selectedOptions[0].dataset.count || '0';
+      });
+      fakeForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const clip = allClips.find((item) => item.id === card.dataset.id);
+        if (!clip) return;
+        const formData = new FormData(fakeForm);
+        const reaction = formData.get('reaction');
+        const count = Number(formData.get('count'));
+        const res = await fetch('/api/admin/reaction', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
+          body: JSON.stringify({ clipId: clip.id, reaction, count })
+        });
+        if (!res.ok) return;
+        const payload = await res.json();
+        clip.reactions = { ...(clip.reactions || {}), [reaction]: payload.count };
+        render();
+      });
+    }
   });
 }
 

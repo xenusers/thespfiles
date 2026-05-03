@@ -72,9 +72,11 @@ body {
 .folder-btn.active, .folder-btn:hover { border-color: var(--accent); box-shadow: 0 0 18px rgba(139,233,253,.45); }
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; backdrop-filter: blur(4px); }
+.card.pinned { border-color: var(--pink); box-shadow: 0 0 22px rgba(255,121,198,.2); }
 .card img { width: 100%; display: block; max-height: 360px; object-fit: cover; }
 .meta { padding: .7rem .8rem .8rem; }
 .user { display:block; color: var(--muted); margin-bottom: .5rem; }
+.pin-mark { display: inline-block; margin-right: .4rem; color: var(--pink); font-size: .74rem; text-transform: uppercase; letter-spacing: .08em; }
 .reactions { display: flex; flex-wrap: wrap; gap: .45rem; }
 .react-btn { border: 1px solid var(--border); background: rgba(0,0,0,.3); color: white; border-radius: 999px; padding: .35rem .56rem; cursor:pointer; }
 .react-btn.active { border-color: var(--pink); box-shadow: 0 0 14px rgba(255,121,198,.5); }
@@ -85,3 +87,9 @@ body {
 .caption-form{display:flex;gap:.45rem;margin:0 0 .55rem;}
 .caption-form input{flex:1;background:rgba(0,0,0,.35);border:1px solid var(--border);color:#fff;border-radius:8px;padding:.35rem .45rem;}
 .caption-form button{background:rgba(139,233,253,.16);color:#fff;border:1px solid var(--accent);border-radius:8px;padding:.35rem .55rem;cursor:pointer;}
+.admin-tools{display:flex;gap:.45rem;align-items:center;flex-wrap:wrap;margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border);}
+.pin-btn,.fake-reaction-form button{background:rgba(255,121,198,.14);color:#fff;border:1px solid var(--pink);border-radius:8px;padding:.35rem .55rem;cursor:pointer;}
+.pin-btn.active{background:rgba(255,121,198,.32);}
+.fake-reaction-form{display:flex;gap:.35rem;align-items:center;}
+.fake-reaction-form select,.fake-reaction-form input{min-width:0;background:rgba(0,0,0,.35);border:1px solid var(--border);color:#fff;border-radius:8px;padding:.35rem .4rem;}
+.fake-reaction-form input{width:4.8rem;}

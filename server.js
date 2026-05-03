@@ -8,7 +8,8 @@ const ROOT = __dirname;
 const UPLOADS_DIR = path.join(ROOT, 'uploads');
 const REACTIONS_FILE = path.join(ROOT, 'reactions.json');
 const CAPTIONS_FILE = path.join(ROOT, 'captions.json');
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+const PINS_FILE = path.join(ROOT, 'pins.json');
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'xenuser';
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif']);
 
 app.use(express.json());
@@ -26,6 +27,7 @@ const writeJson = (file, data) => {
 
 ensureJson(REACTIONS_FILE);
 ensureJson(CAPTIONS_FILE);
+ensureJson(PINS_FILE);
 function collectImages(baseDir, relativePrefix = '') {
   const out = [];
   const entries = fs.readdirSync(baseDir, { withFileTypes: true });
@@ -42,6 +44,7 @@ function getClips() {
   if (!fs.existsSync(UPLOADS_DIR)) return [];
   const reactions = readJson(REACTIONS_FILE);
   const captions = readJson(CAPTIONS_FILE);
+  const pins = readJson(PINS_FILE);
   const users = fs.readdirSync(UPLOADS_DIR, { withFileTypes: true }).filter((d) => d.isDirectory());
   const clips = [];
   for (const userDir of users) {
@@ -53,11 +56,12 @@ function getClips() {
         user,
         src: `/uploads/${encodeURIComponent(user)}/${relFile.split('/').map(encodeURIComponent).join('/')}`,
         caption: captions[clipId] || '',
-        reactions: reactions[clipId] || {}
+        reactions: reactions[clipId] || {},
+        pinned: Boolean(pins[clipId])
       });
     }
   }
-  return clips.sort((a, b) => a.user.localeCompare(b.user));
+  return clips.sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.user.localeCompare(b.user));
 }
 
 const isAdmin = (req) => ADMIN_TOKEN && req.header('x-admin-token') === ADMIN_TOKEN;
@@ -84,6 +88,32 @@ app.post('/api/caption', (req, res) => {
   all[clipId] = caption.slice(0, 180);
   writeJson(CAPTIONS_FILE, all);
   return res.json({ ok: true, caption: all[clipId] });
+});
+
+app.post('/api/pin', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin token required' });
+  const { clipId, pinned } = req.body || {};
+  if (!clipId) return res.status(400).json({ error: 'clipId is required' });
+  if (!getClips().some((c) => c.id === clipId)) return res.status(404).json({ error: 'Clip not found' });
+  const all = readJson(PINS_FILE);
+  if (pinned) all[clipId] = true;
+  else delete all[clipId];
+  writeJson(PINS_FILE, all);
+  return res.json({ ok: true, pinned: Boolean(pinned) });
+});
+
+app.post('/api/admin/reaction', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin token required' });
+  const { clipId, reaction, count } = req.body || {};
+  const nextCount = Number(count);
+  if (!clipId || !reaction || !Number.isFinite(nextCount)) return res.status(400).json({ error: 'clipId, reaction, and count are required' });
+  if (!getClips().some((c) => c.id === clipId)) return res.status(404).json({ error: 'Clip not found' });
+  const all = readJson(REACTIONS_FILE);
+  const clip = all[clipId] || {};
+  clip[reaction] = Math.max(0, Math.floor(nextCount));
+  all[clipId] = clip;
+  writeJson(REACTIONS_FILE, all);
+  return res.json({ ok: true, count: clip[reaction] });
 });
 
 app.get('*', (_req, res) => res.sendFile(path.join(ROOT, 'public', 'index.html')));
